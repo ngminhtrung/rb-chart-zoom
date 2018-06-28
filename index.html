@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title>Panning and Zooming with D3v4</title>
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content="How to use D3v4's zoom behavior to implement panning and zooming on elements." />
+    <meta name="og:image" content="/img/2016-07-03-d3-panning-and-zooming.png" />
+
+    <!-- syntax highlighting CSS -->
+    <link rel="stylesheet" href="/css/syntax.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="/css/font-awesome-4.2.0/css/font-awesome.min.css">
+
+    <!-- Custom CSS -->
+    <!-- link rel="stylesheet" href="/css/main.css" -->
+
+    <script src="d3.v4.min.js"></script>
+    <script type='text/javascript'>
+        var d3v4 = d3;
+    </script>
+
+    <link rel="stylesheet" href="/css/the.css">
+    <link rel="stylesheet" href="/css/wp.css">
+
+</head>
+
+<body itemscope itemtype="http://schema.org/Product">
+    <div class="container">
+        <div class='text-center'>
+            <h1 class="text-muted">Empty Pipes</h1>
+        </div>
+
+
+        <div class="container">
+
+            <div class="row-fluid">
+
+                <h3>Panning and Zooming with D3v4</h3>
+            </div>
+
+        </div>
+
+        <style>
+            path.line {
+                fill: none;
+                stroke: #666;
+                stroke-width: 1.5px;
+            }
+
+            path.area {
+                fill: #e7e7e7;
+            }
+
+            .axis {
+                shape-rendering: crispEdges;
+            }
+
+            .x.axis line,
+            .x.axis path {
+                fill: none;
+                stroke: #000;
+            }
+
+            .x.axis .minor {
+                stroke-opacity: .5;
+            }
+
+            .x.axis path {}
+
+            .y.axis line,
+            .y.axis path {
+                fill: none;
+                stroke: #000;
+            }
+
+            svg text {
+                font-family: sans-serif;
+                font-size: 13px;
+            }
+
+
+            circle {
+                fill: transparent;
+                stroke: black;
+                stroke-width: 1px;
+            }
+        </style>
+
+        <p>All that’s necessary for panning and zooming is a translation
+            <em>[t
+                <sub>x</sub>, t
+                <sub>y</sub>]</em> and a scale factor
+            <em>k</em>. When a zoom transform is applied to an element at position
+            <em>[x
+                <sub>0</sub>, y
+                <sub>0</sub>]</em>, its new position becomes
+            <em>[t
+                <sub>x</sub> + k × x
+                <sub>0</sub>, t
+                <sub>y</sub> + k × y
+                <sub>0</sub>]</em>. That’s it. Everything else is just sugar and spice on top of this simple transform.</p>
+
+        <p>The major difference between zooming in D3v3 and and D3v4 is that the behavior (dealing with events) and the transforms
+            (positioning elements) are more separated. In v3, they used to be part of the behavior whereas in v4, they’re
+            part of the element on which the behavior is called.</p>
+
+        <p>To illustrate, let’s plot 4 points. The rest of this post will only deal with data in one dimension. It should be
+            trivial to expand to two dimensions. The points will represent the values 1, 1010, 1020 and 5000:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">xScale</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">scaleLinear</span><span class="p">()</span>
+        <span class="p">.</span><span class="nx">domain</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span><span class="mi">5000</span><span class="p">])</span>
+        <span class="p">.</span><span class="nx">range</span><span class="p">([</span><span class="mi">100</span><span class="p">,</span><span class="mi">500</span><span class="p">])</span>
+
+    <span class="kd">var</span> <span class="nx">dataPoints</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">1010</span><span class="p">,</span><span class="mi">1020</span><span class="p">,</span><span class="mi">5000</span><span class="p">];</span>
+
+    <span class="nx">gMain</span><span class="p">.</span><span class="nx">selectAll</span><span class="p">(</span><span class="s1">'circle'</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">data</span><span class="p">(</span><span class="nx">dataPoints</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">enter</span><span class="p">()</span>
+    <span class="p">.</span><span class="nx">append</span><span class="p">(</span><span class="s1">'circle'</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s1">'r'</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s1">'cx'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">xScale</span><span class="p">(</span><span class="nx">d</span><span class="p">);</span> <span class="p">});</span>
+</code></pre>
+            </div>
+        </div>
+
+        <svg class="fig1"></svg>
+
+        <script>
+
+            function figure1() {
+                var margin = { 'left': -50, 'top': 80, 'bottom': 20, 'right': 20 };
+                var width = 500, height = 50;
+                var svg = d3v4.selectAll(".fig1")
+                    .attr('height', height + margin.top + margin.bottom)
+                    .attr('width', width + margin.left + margin.right);
+
+                var gMain = svg.append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                var xScale = d3v4.scaleLinear()
+                    .domain([0, 5000])
+                    .range([100, 500])
+
+                var dataPoints = [1, 1010, 1020, 5000];
+
+                gMain.selectAll('circle')
+                    .data(dataPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('r', 7)
+                    .attr('cx', function (d) { return xScale(d); });
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', -60)
+                    .attr('text-anchor', 'middle')
+                    .text('point value');
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', 55)
+                    .attr('text-anchor', 'middle')
+                    .text('screen position');
+
+
+                var xTopAxis = d3v4.axisTop()
+                    .scale(xScale)
+                    .ticks(3)
+
+                var gTopAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,-15)')
+
+                var xAxis = d3v4.axisBottom()
+                    .scale(d3v4.scaleLinear().domain([100, 500]).range([100, 500]))
+                    .ticks(3)
+
+                var gAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,15)')
+
+                gAxis.call(xAxis);
+                gTopAxis.call(xTopAxis);
+            }
+            figure1();
+        </script>
+
+        <p>We can see that two of the points, 1010 and 1020, are virtually on top of each other. Using our
+            <code class="highlighter-rouge">xScale</code>, we can determine that they’re less than 1 pixel apart.</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">)</span> <span class="c1">//180.8</span>
+    <span class="nx">xScale</span><span class="p">(</span><span class="mi">1020</span><span class="p">)</span> <span class="c1">//181.6</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>What if we want to zoom in so that they’re 10 pixels apart? We’ll first need to calculate the scale factor,
+            <em>k</em>:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">k</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">/</span> <span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="mi">1020</span><span class="p">)</span> <span class="o">-</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">))</span>  <span class="c1">//~ 12.5 </span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>Let’s say we want the point 1010 to be positioned at pixel 200. We need to determine
+            <em>t
+                <sub>x</sub>
+            </em> such that
+            <em>200 = t
+                <sub>x</sub> + k × xScale(1010)</em>
+        </p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">tx</span> <span class="o">=</span> <span class="mi">200</span> <span class="o">-</span> <span class="nx">k</span> <span class="o">*</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">)</span> <span class="c1">//-2600</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>When we apply this to our plot.</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">k</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">/</span> <span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="mi">1020</span><span class="p">)</span> <span class="o">-</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">))</span>
+    <span class="kd">var</span> <span class="nx">tx</span> <span class="o">=</span> <span class="mi">200</span> <span class="o">-</span> <span class="nx">k</span> <span class="o">*</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">)</span>
+    <span class="kd">var</span> <span class="nx">t</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">zoomIdentity</span><span class="p">.</span><span class="nx">translate</span><span class="p">(</span><span class="nx">tx</span><span class="p">,</span> <span class="mi">0</span><span class="p">).</span><span class="nx">scale</span><span class="p">(</span><span class="nx">k</span><span class="p">)</span>
+
+    <span class="nx">gMain</span><span class="p">.</span><span class="nx">selectAll</span><span class="p">(</span><span class="s1">'circle'</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">data</span><span class="p">(</span><span class="nx">dataPoints</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">enter</span><span class="p">()</span>
+    <span class="p">.</span><span class="nx">append</span><span class="p">(</span><span class="s1">'circle'</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s1">'r'</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s1">'cx'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">t</span><span class="p">.</span><span class="nx">applyX</span><span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="nx">d</span><span class="p">));</span> <span class="p">});</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>We get two lovely separated circles.</p>
+
+        <svg class="fig2"></svg>
+
+        <script>
+
+            function fig2() {
+                var margin = { 'left': -50, 'top': 80, 'bottom': 20, 'right': 20 };
+                var width = 500, height = 50;
+                var svg = d3v4.selectAll(".fig2")
+                    .attr('height', height + margin.top + margin.bottom)
+                    .attr('width', width + margin.left + margin.right);
+
+                var gMain = svg.append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                var xScale = d3v4.scaleLinear()
+                    .domain([0, 5000])
+                    .range([100, 500])
+
+                var dataPoints = [1, 1010, 1020, 5000];
+
+
+                var k = 10 / (xScale(1020) - xScale(1010))
+                var tx = 200 - k * xScale(1010)
+                var t = d3v4.zoomIdentity.translate(tx, 0).scale(k)
+
+                gMain.selectAll('circle')
+                    .data(dataPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('r', 7)
+                    .attr('cx', function (d) { return t.applyX(xScale(d)); });
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', -60)
+                    .attr('text-anchor', 'middle')
+                    .text('point value');
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', 55)
+                    .attr('text-anchor', 'middle')
+                    .text('screen position');
+
+
+                var xTopAxis = d3v4.axisTop()
+                    .scale(xScale)
+                    .ticks(3)
+
+                var gTopAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,-15)')
+
+                var xAxis = d3v4.axisBottom()
+                    .scale(d3v4.scaleLinear().domain([100, 500]).range([100, 500]))
+                    .ticks(3)
+
+                var gAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,15)')
+
+                gAxis.call(xAxis);
+                gTopAxis.call(xTopAxis);
+            }
+            fig2();
+        </script>
+
+        <p>Fantastic, right? But notice that the top axis still refers to the old domain. This is because we never changed it.
+            In the old version of D3, we would attach the axis to the zoom behavior, set the
+            <code class="highlighter-rouge">translate</code> and
+            <code class="highlighter-rouge">scale</code> properties and be done with it. In v4, we have to rescale our linear scale manually and use the rescaled version
+            to create the axis:
+        </p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">xNewScale</span> <span class="o">=</span> <span class="nx">t</span><span class="p">.</span><span class="nx">rescaleX</span><span class="p">(</span><span class="nx">xScale</span><span class="p">)</span>
+
+    <span class="kd">var</span> <span class="nx">xTopAxis</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">axisTop</span><span class="p">()</span>
+    <span class="p">.</span><span class="nx">scale</span><span class="p">(</span><span class="nx">xNewScale</span><span class="p">)</span>
+    <span class="p">.</span><span class="nx">ticks</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+</code></pre>
+            </div>
+        </div>
+
+        <svg class="fig3"></svg>
+
+        <script>
+
+            function fig3() {
+                var margin = { 'left': -50, 'top': 80, 'bottom': 20, 'right': 20 };
+                var width = 500, height = 50;
+                var svg = d3v4.selectAll(".fig3")
+                    .attr('height', height + margin.top + margin.bottom)
+                    .attr('width', width + margin.left + margin.right);
+
+                var gMain = svg.append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                var xScale = d3v4.scaleLinear()
+                    .domain([0, 5000])
+                    .range([100, 500])
+
+                var dataPoints = [1, 1010, 1020, 5000];
+
+
+                var k = 10 / (xScale(1020) - xScale(1010))
+                var tx = 200 - k * xScale(1010)
+                var t = d3v4.zoomIdentity.translate(tx, 0).scale(k)
+
+                var xNewScale = t.rescaleX(xScale)
+
+                gMain.selectAll('circle')
+                    .data(dataPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('r', 7)
+                    .attr('cx', function (d) { return t.applyX(xScale(d)); });
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', -60)
+                    .attr('text-anchor', 'middle')
+                    .text('point value');
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', 55)
+                    .attr('text-anchor', 'middle')
+                    .text('screen position');
+
+
+                var xTopAxis = d3v4.axisTop()
+                    .scale(xNewScale)
+                    .ticks(3)
+
+                var gTopAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,-15)')
+
+                var xAxis = d3v4.axisBottom()
+                    .scale(d3v4.scaleLinear().domain([100, 500]).range([100, 500]))
+                    .ticks(3)
+
+                var gAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,15)')
+
+                gAxis.call(xAxis);
+                gTopAxis.call(xTopAxis);
+            }
+            fig3();
+
+        </script>
+
+        <p>The examples above demonstrate how the zoom transforms work, but they don’t actually use the zoom behavior. For that
+            we need to create a behavior and attach it to an element:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">var</span> <span class="nx">circles</span> <span class="o">=</span> <span class="nx">svg</span><span class="p">.</span><span class="nx">selectAll</span><span class="p">(</span><span class="s1">'circle'</span><span class="p">);</span>
+    <span class="kd">var</span> <span class="nx">zoom</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">zoom</span><span class="p">().</span><span class="nx">on</span><span class="p">(</span><span class="s1">'zoom'</span><span class="p">,</span> <span class="nx">zoomed</span><span class="p">);</span>
+
+    <span class="kd">function</span> <span class="nx">zoomed</span><span class="p">()</span> <span class="p">{</span>
+        <span class="kd">var</span> <span class="nx">transform</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">event</span><span class="p">.</span><span class="nx">transform</span><span class="p">;</span>
+
+        <span class="c1">// rescale the x linear scale so that we can draw the top axis</span>
+        <span class="kd">var</span> <span class="nx">xNewScale</span> <span class="o">=</span> <span class="nx">transform</span><span class="p">.</span><span class="nx">rescaleX</span><span class="p">(</span><span class="nx">xScale</span><span class="p">);</span>
+        <span class="nx">xTopAxis</span><span class="p">.</span><span class="nx">scale</span><span class="p">(</span><span class="nx">xNewScale</span><span class="p">)</span>
+        <span class="nx">gTopAxis</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">xTopAxis</span><span class="p">);</span>
+
+        <span class="c1">// draw the circles in their new positions</span>
+        <span class="nx">circles</span><span class="p">.</span><span class="nx">attr</span><span class="p">(</span><span class="s1">'cx'</span><span class="p">,</span> <span class="kd">function</span><span class="p">(</span><span class="nx">d</span><span class="p">)</span> <span class="p">{</span> <span class="k">return</span> <span class="nx">transform</span><span class="p">.</span><span class="nx">applyX</span><span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="nx">d</span><span class="p">));</span> <span class="p">});</span>
+    <span class="p">}</span>
+
+    <span class="nx">gMain</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">zoom</span><span class="p">)</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>Here we recompute the zoom transform every time there is a zoom event and reposition each circle. We also rescale
+            the x-scale so that we can use it to create an axis. The astute observer will note that
+            <code class="highlighter-rouge">transform.applyX(xScale(d))</code> is actually equivalent to
+            <code class="highlighter-rouge">xNewScale(d)</code>. Automatic rescaling was possible using v3 by calling
+            <code class="highlighter-rouge">zoom.x(xScale)</code>, but this has been done away with in favor of explicit rescaling using
+            <code class="highlighter-rouge">transform.rescaleX(xScale)</code>.</p>
+
+        <p>The code above works but if we had programmatically zoomed in beforehand (as we did in the previous section by applying
+            the transform), then applying the zoom behavior would remove that transform as soon as we start zooming.</p>
+
+        <p>Why?</p>
+
+        <p>Because in the
+            <code class="highlighter-rouge">zoomed</code> function we obtain a
+            <code class="highlighter-rouge">transform</code> from
+            <code class="highlighter-rouge">d3.event.transform</code>. In previous versions of D3, this would come from the zoom behavior itself (
+            <code class="highlighter-rouge">zoom.translate</code> and
+            <code class="highlighter-rouge">zoom.scale</code>). In v4, it comes from the element on which the zoom behavior is called (
+            <code class="highlighter-rouge">gMain</code>). To programmatically zoom in and then apply the zoom behavior starting from there, we need to set the zoom
+            transform of the
+            <code class="highlighter-rouge">gMain</code> element before we call the behavior:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code><span class="kd">var</span> <span class="nx">k</span> <span class="o">=</span> <span class="mi">10</span> <span class="o">/</span> <span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="mi">1020</span><span class="p">)</span> <span class="o">-</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">))</span>
+<span class="kd">var</span> <span class="nx">tx</span> <span class="o">=</span> <span class="mi">200</span> <span class="o">-</span> <span class="nx">k</span> <span class="o">*</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">1010</span><span class="p">)</span>
+<span class="kd">var</span> <span class="nx">t</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">zoomIdentity</span><span class="p">.</span><span class="nx">translate</span><span class="p">(</span><span class="nx">tx</span><span class="p">,</span> <span class="mi">0</span><span class="p">).</span><span class="nx">scale</span><span class="p">(</span><span class="nx">k</span><span class="p">)</span>
+
+<span class="nx">gMain</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">zoom</span><span class="p">.</span><span class="nx">transform</span><span class="p">,</span> <span class="nx">t</span><span class="p">);</span>
+<span class="nx">gMain</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">zoom</span><span class="p">)</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>Now we start with an already zoomed in view
+            <strong>and</strong> can zoom in and out using the mouse.
+        </p>
+
+        <svg class="fig4"></svg>
+
+        <script>
+
+            function fig4() {
+                var margin = { 'left': -50, 'top': 80, 'bottom': 20, 'right': 20 };
+                var width = 500, height = 50;
+                var svg = d3v4.selectAll(".fig4")
+                    .attr('height', height + margin.top + margin.bottom)
+                    .attr('width', width + margin.left + margin.right);
+
+                var gMain = svg.append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                gMain.append('rect')
+                    .attr('x', 50)
+                    .attr('y', -25)
+                    .attr('width', width)
+                    .attr('height', height)
+                    .style('fill', 'transparent');
+
+                var xScale = d3v4.scaleLinear()
+                    .domain([0, 5000])
+                    .range([100, 500])
+
+                var dataPoints = [1, 1010, 1020, 5000];
+
+
+                var k = 10 / (xScale(1020) - xScale(1010))
+                var tx = 200 - k * xScale(1010)
+                var t = d3v4.zoomIdentity.translate(tx, 0).scale(k)
+
+                var xNewScale = t.rescaleX(xScale)
+
+
+                var circles = gMain.selectAll('circle')
+                    .data(dataPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('r', 7)
+                //.attr('cx', function(d) { return t.applyX(xScale(d)); })
+
+
+
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', -60)
+                    .attr('text-anchor', 'middle')
+                    .text('point value');
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', 55)
+                    .attr('text-anchor', 'middle')
+                    .text('screen position');
+
+
+                var xTopAxis = d3v4.axisTop()
+                    .scale(xNewScale)
+                    .ticks(3)
+
+                var gTopAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,-15)')
+
+                var xAxis = d3v4.axisBottom()
+                    .scale(d3v4.scaleLinear().domain([100, 500]).range([100, 500]))
+                    .ticks(3)
+
+                var gAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,15)')
+
+                var zoom = d3v4.zoom().on('zoom', zoomed);
+                function zoomed() {
+                    var transform = d3v4.event.transform;
+
+                    var xNewScale = transform.rescaleX(xScale);
+                    xTopAxis.scale(xNewScale)
+                    gTopAxis.call(xTopAxis);
+
+                    circles.attr('cx', function (d) { return xNewScale(d); });
+                }
+                gMain.call(zoom.transform, t);
+                gMain.call(zoom)
+
+                gAxis.call(xAxis);
+                gTopAxis.call(xTopAxis);
+            }
+            fig4();
+        </script>
+
+        <p>To wrap up this post, let’s combine these techniques to create a figure which automatically zooms between random
+            data points (a la
+            <a href="http://bl.ocks.org/mbostock/b783fbb2e673561d214e09c7fb5cedee">M. Bostock’s Zoom Transitions Block</a>). How do we do this?</p>
+
+        <p>First, we need a function to call every time we want to jump to a point:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">let</span> <span class="nx">targetPoint</span> <span class="o">=</span> <span class="mi">1010</span><span class="p">;</span>
+
+    <span class="kd">function</span> <span class="nx">transition</span><span class="p">(</span><span class="nx">selection</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kd">let</span> <span class="nx">n</span> <span class="o">=</span> <span class="nx">dataPoints</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span>
+        <span class="kd">let</span> <span class="nx">prevTargetPoint</span> <span class="o">=</span> <span class="nx">targetPoint</span><span class="p">;</span>
+
+        <span class="c1">// pick a new point to zoom to</span>
+        <span class="k">while</span> <span class="p">(</span><span class="nx">targetPoint</span> <span class="o">==</span> <span class="nx">prevTargetPoint</span><span class="p">)</span> <span class="p">{</span>
+            <span class="kd">let</span> <span class="nx">i</span> <span class="o">=</span> <span class="nb">Math</span><span class="p">.</span><span class="nx">random</span><span class="p">()</span> <span class="o">*</span> <span class="nx">n</span> <span class="o">|</span> <span class="mi">0</span>
+            <span class="nx">targetPoint</span> <span class="o">=</span> <span class="nx">dataPoints</span><span class="p">[</span><span class="nx">i</span><span class="p">];</span>
+        <span class="p">}</span>
+
+        <span class="nx">selection</span><span class="p">.</span><span class="nx">transition</span><span class="p">()</span>
+        <span class="p">.</span><span class="nx">delay</span><span class="p">(</span><span class="mi">300</span><span class="p">)</span>
+        <span class="p">.</span><span class="nx">duration</span><span class="p">(</span><span class="mi">2000</span><span class="p">)</span>
+        <span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">zoom</span><span class="p">.</span><span class="nx">transform</span><span class="p">,</span> <span class="nx">transform</span><span class="p">)</span>
+        <span class="p">.</span><span class="nx">on</span><span class="p">(</span><span class="s1">'end'</span><span class="p">,</span> <span class="kd">function</span><span class="p">()</span> <span class="p">{</span> <span class="nx">circles</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">transition</span><span class="p">);</span> <span class="p">});</span>
+    <span class="p">}</span>
+
+    <span class="nx">circles</span><span class="p">.</span><span class="nx">call</span><span class="p">(</span><span class="nx">transition</span><span class="p">);</span>
+</code></pre>
+            </div>
+        </div>
+
+        <p>This function picks a random point (
+            <code class="highlighter-rouge">targetPoint</code>) and calls a transition on the selection. In our case, the selection will be the circles. When the transition
+            is over, we simply call the function again to start it over.
+        </p>
+
+        <p>Second, we need a transform to center the view on the target point:</p>
+
+        <div class="language-javascript highlighter-rouge">
+            <div class="highlight">
+                <pre class="highlight"><code>    <span class="kd">function</span> <span class="nx">transform</span><span class="p">()</span> <span class="p">{</span>
+        <span class="c1">// put points that are 10 values apart 20 pixels apart</span>
+        <span class="kd">var</span> <span class="nx">k</span> <span class="o">=</span> <span class="mi">20</span> <span class="o">/</span> <span class="p">(</span><span class="nx">xScale</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span> <span class="o">-</span> <span class="nx">xScale</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="c1">// center in the middle of the visible area</span>
+        <span class="kd">var</span> <span class="nx">tx</span> <span class="o">=</span> <span class="p">(</span><span class="nx">xScale</span><span class="p">.</span><span class="nx">range</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nx">xScale</span><span class="p">.</span><span class="nx">range</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span><span class="o">/</span><span class="mi">2</span> <span class="o">-</span> <span class="nx">k</span> <span class="o">*</span> <span class="nx">xScale</span><span class="p">(</span><span class="nx">targetPoint</span><span class="p">)</span>
+        <span class="kd">var</span> <span class="nx">t</span> <span class="o">=</span> <span class="nx">d3</span><span class="p">.</span><span class="nx">zoomIdentity</span><span class="p">.</span><span class="nx">translate</span><span class="p">(</span><span class="nx">tx</span><span class="p">,</span> <span class="mi">0</span><span class="p">).</span><span class="nx">scale</span><span class="p">(</span><span class="nx">k</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nx">t</span><span class="p">;</span>
+    <span class="p">}</span>
+
+</code></pre>
+            </div>
+        </div>
+
+        <svg class="fig5"></svg>
+
+        <script>
+
+            function fig5() {
+                var margin = { 'left': -50, 'top': 80, 'bottom': 20, 'right': 20 };
+                var width = 500, height = 50;
+                var svg = d3v4.selectAll(".fig5")
+                    .attr('height', height + margin.top + margin.bottom)
+                    .attr('width', width + margin.left + margin.right);
+
+                var gMain = svg.append('g')
+                    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+                gMain.append('rect')
+                    .attr('x', 50)
+                    .attr('y', -25)
+                    .attr('width', width)
+                    .attr('height', height)
+                    .style('fill', 'transparent');
+
+                var xScale = d3v4.scaleLinear()
+                    .domain([0, 5000])
+                    .range([100, 500])
+
+                var dataPoints = [1, 1010, 1020, 5000];
+                var targetPoint = 1015;
+
+
+                var k = 10 / (xScale(1020) - xScale(1010))
+                var tx = 200 - k * xScale(1010)
+                var t = d3v4.zoomIdentity.translate(tx, 0).scale(k)
+
+                var xNewScale = t.rescaleX(xScale)
+
+
+                var circles = gMain.selectAll('circle')
+                    .data(dataPoints)
+                    .enter()
+                    .append('circle')
+                    .attr('r', 7)
+                //.attr('cx', function(d) { return t.applyX(xScale(d)); })
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', -60)
+                    .attr('text-anchor', 'middle')
+                    .text('point value');
+
+                gMain.append('text')
+                    .attr('x', 300)
+                    .attr('y', 55)
+                    .attr('text-anchor', 'middle')
+                    .text('screen position');
+
+                var xTopAxis = d3v4.axisTop()
+                    .scale(xNewScale)
+                    .ticks(3)
+
+                var gTopAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,-15)')
+
+                var xAxis = d3v4.axisBottom()
+                    .scale(d3v4.scaleLinear().domain([100, 500]).range([100, 500]))
+                    .ticks(3)
+
+                var gAxis = gMain.append('g')
+                    .classed('x axis', true)
+                    .attr('transform', 'translate(0,15)')
+
+                var zoom = d3v4.zoom().on('zoom', zoomed);
+                function zoomed() {
+                    var transform = d3v4.event.transform;
+                    var xNewScale = transform.rescaleX(xScale);
+
+                    xTopAxis.scale(xNewScale)
+                    gTopAxis.call(xTopAxis);
+                    circles.attr('cx', function (d) { return transform.applyX(xScale(d)); });
+                }
+                gMain.call(zoom.transform, t);
+                gMain.call(zoom)
+
+                gAxis.call(xAxis);
+                gTopAxis.call(xTopAxis);
+
+                function transform() {
+                    // put points that are 10 values apart 20 pixels apart
+                    var k = 20 / (xScale(10) - xScale(0))
+                    // center in the middle of the visible area
+                    var tx = (xScale.range()[1] + xScale.range()[0]) / 2 - k * xScale(targetPoint)
+                    var t = d3v4.zoomIdentity.translate(tx, 0).scale(k)
+                    return t;
+                }
+
+                function transition(selection) {
+                    let n = dataPoints.length;
+                    let prevTargetPoint = targetPoint;
+
+                    // pick a new point to zoom to
+                    while (targetPoint == prevTargetPoint) {
+                        let i = Math.random() * n | 0
+                        targetPoint = dataPoints[i];
+                    }
+
+                    selection.transition()
+                        .delay(300)
+                        .duration(2000)
+                        .call(zoom.transform, transform)
+                        .on('end', function () { circles.call(transition); });
+                }
+
+                circles.call(transition);
+            }
+            fig5();
+        </script>
+
+        <p>And that’s all. Just remember, when zooming and panning the position of the transformed point
+            <em>[x
+                <sub>1</sub>,y
+                <sub>1</sub>] = [t
+                <sub>x</sub> + k × x
+                <sub>0</sub>, t
+                <sub>y</sub> + k × y
+                <sub>0</sub>]</em>. Everything else is just window dressing.</p>
+
+
+
+
+
+
+
+        <div class="footer">
+            <p text-align="center">&copy; pkerp 2013-2017</p>
+        </div>
+
+    </div>
+    <!-- /container -->
+
+    <script>
+        (function (i, s, o, g, r, a, m) {
+        i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+            (i[r].q = i[r].q || []).push(arguments)
+        }, i[r].l = 1 * new Date(); a = s.createElement(o),
+            m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+        })(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+        ga('create', 'UA-44844544-1', 'emptypipes.org');
+        ga('send', 'pageview');
+
+    </script>
+
+
+    <!-- Bootstrap core JavaScript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="/js/lib/jquery.min.js"></script>
+    <script src="/js/lib/bootstrap.min.js"></script>
+</body>
+
+</html>

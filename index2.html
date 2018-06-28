@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="d3.v4.min.js"></script>
+    <style>
+        .red {
+            color: red;
+        }
+
+        #txty {
+            margin-left: 50px;
+        }
+
+        .section {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid antiquewhite;
+        }
+
+        p {
+            text-align: center;
+            width: 100%;
+            color: blue;
+        }
+
+        body {
+            margin: 0 auto;
+        }
+    </style>
+    <title>Document</title>
+</head>
+
+<body>
+    <div class="section section1">
+        <p>
+            <strong>Step 1:</strong> Draw 4 points without rescaling</p>
+        <svg class="figure1"></svg>
+    </div>
+    <div class="section section2">
+        <p><strong>Step 2:</strong> Rescaling to separate overlapped points 1010 & 1020</p>
+        <svg class="figure2"></svg>
+    </div>
+    <div class="section section3">
+        <p><strong>Step 3:</strong> Rescaling x top axis</p>
+        <svg class="figure3"></svg>
+    </div>
+    <div class="section section4">
+        <p><strong>Step 4:</strong> Adding zoom behavior. Touch to see it.</p>
+        <p id="txty">
+            Current {tx, ty}: {
+            <span class="red" id="tx"></span>,
+            <span class="red" id="ty"></span>}</p>
+        <svg class="figure4"></svg>
+    </div>
+    <div class="section section5">
+            <p><strong>Step 5:</strong> Selecting random point for zooming</p>
+        <svg class="figure5"></svg>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
